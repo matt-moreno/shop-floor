@@ -35,6 +35,8 @@ export interface Diagnostic {
   line: number;
   severity: "error" | "warning";
   message: string;
+  /** "verify" marks a predicted alarm rather than a program error. */
+  source?: "verify";
 }
 
 export interface Program {

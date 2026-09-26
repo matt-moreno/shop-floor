@@ -193,6 +193,7 @@ export class SceneView {
       this.walls.material,
     );
     this.stockGroup.add(this.top, this.walls, bottom, ...fixtures(W, D, H));
+    this.stockGroup.add(workZero(W, D, Math.max(W, D)));
     this.drawnVersion = -1;
     this.fitCamera("iso");
   }
@@ -404,6 +405,57 @@ export class SceneView {
       this.chips.emit(this.toolGroup.position, m.tool.diameter / 2, n);
     }
   }
+}
+
+/** Axis arrows at work zero: the front-left corner of the top face. */
+function workZero(W: number, D: number, size: number) {
+  const g = new THREE.Group();
+  g.position.set(-W / 2, 0.05, D / 2);
+  const len = size * 0.22;
+  const axes: [string, string, THREE.Vector3][] = [
+    ["X", "#e0524f", new THREE.Vector3(1, 0, 0)],
+    ["Y", "#5fbf7a", new THREE.Vector3(0, 0, -1)],
+    ["Z", "#4f8fe0", new THREE.Vector3(0, 1, 0)],
+  ];
+  for (const [name, color, dir] of axes) {
+    const arrow = new THREE.ArrowHelper(
+      dir,
+      new THREE.Vector3(),
+      len,
+      color,
+      len * 0.18,
+      len * 0.09,
+    );
+    for (const m of [arrow.line, arrow.cone])
+      Object.assign(m.material, { depthTest: false, transparent: true });
+    arrow.renderOrder = 3;
+    g.add(arrow);
+    const label = textSprite(name, color, len * 0.22);
+    label.position.copy(dir).multiplyScalar(len * 1.18);
+    g.add(label);
+  }
+  return g;
+}
+
+function textSprite(text: string, color: string, size: number) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const ctx = c.getContext("2d")!;
+  ctx.font = "bold 48px ui-monospace, Menlo, monospace";
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 32, 34);
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(c),
+      depthTest: false,
+      transparent: true,
+    }),
+  );
+  sprite.scale.setScalar(size);
+  sprite.renderOrder = 3;
+  return sprite;
 }
 
 function fixtures(W: number, D: number, H: number) {

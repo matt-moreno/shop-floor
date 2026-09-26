@@ -143,7 +143,11 @@ const theme = EditorView.theme(
   { dark: true },
 );
 
+/** Move the cursor to a line; `seq` lets the same line be requested twice. */
+export type Jump = { line: number; seq: number };
+
 interface Props {
+  jump?: Jump | null;
   value: string;
   onChange: (v: string) => void;
   readOnly: boolean;
@@ -152,6 +156,7 @@ interface Props {
 }
 
 export function Editor({
+  jump,
   value,
   onChange,
   readOnly,
@@ -231,6 +236,17 @@ export function Editor({
       });
     }
   }, [mark?.line, mark?.kind]);
+
+  useEffect(() => {
+    const v = view.current!;
+    if (!jump || jump.line < 1 || jump.line > v.state.doc.lines) return;
+    const line = v.state.doc.line(jump.line);
+    v.dispatch({
+      selection: { anchor: line.from, head: line.to },
+      effects: EditorView.scrollIntoView(line.from, { y: "center" }),
+    });
+    v.focus();
+  }, [jump]);
 
   return <div className="editor" ref={host} />;
 }

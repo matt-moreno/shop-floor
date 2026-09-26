@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { holeCenters, nominalHeight } from "../game/features";
 import { JOBS, jobTarget } from "../game/jobs";
 import { HOME, interpret, type Op } from "./gcode";
 import { Machine } from "./machine";
 import { compare, grade } from "./score";
 import { Heightmap } from "./stock";
+import { verify } from "./verify";
 import { getTool } from "./tools";
 
 const moves = (ops: Op[]) => ops.filter((o) => o.kind === "move");
@@ -184,6 +186,35 @@ describe("machine", () => {
   });
 });
 
+describe("verify", () => {
+  const stock = { width: 60, depth: 40, height: 10 };
+  const start = "G21 G90\nT2 M6\nS8000 M3\nG0 X-8 Y20\nG0 Z2\n";
+
+  it("finds every problem in one pass, one per line", () => {
+    const v = verify(
+      interpret(
+        start + "G0 Z-2\nG0 X30\nG1 Z-9 F300\nG1 X70 F1000\nG0 Z60\nM30",
+      ),
+      stock,
+    );
+    expect(v.alarms.map((a) => [a.line, a.crash])).toEqual([
+      [7, true], // rapid across into the stock
+      [9, false], // 9 mm side cut breaks T2
+    ]);
+  });
+
+  it("predicts the same cycle time as a real run", () => {
+    const src = start + "G1 Z-2 F300\nG1 X70 F1000\nG0 Z60\nM30";
+    const v = verify(interpret(src), stock);
+    expect(v.alarms).toEqual([]);
+    expect(v.time).toBeCloseTo(run(src).time, 6);
+  });
+
+  it("skips programs that don't parse", () => {
+    expect(verify(interpret("G1 X10"), stock)).toEqual({ alarms: [], time: 0 });
+  });
+});
+
 describe("jobs", () => {
   for (const job of JOBS) {
     it(`${job.title}: reference runs clean and earns 3 stars`, () => {
@@ -206,6 +237,27 @@ describe("jobs", () => {
         expect(grade(compare(m.stock, target), m.time, par).passed).toBe(false);
       });
   }
+
+  for (const job of JOBS.filter((j) => !j.sandbox))
+    it(`${job.title}: the drawing matches the reference part`, () => {
+      const { target } = jobTarget(job);
+      const { width, depth } = job.stock;
+      let checked = 0;
+      // Hole centers sit on a drill point, so grid rounding shows up as height.
+      const check = (x: number, y: number, tol = 0.1) => {
+        const z = nominalHeight(job.features, x, y);
+        if (z === null) return;
+        checked++;
+        const at = `at X${x.toFixed(2)} Y${y.toFixed(2)}`;
+        expect(Math.abs(target.heightAt(x, y) - z), at).toBeLessThan(tol);
+      };
+      for (let y = 0.7; y < depth; y += 1.3)
+        for (let x = 0.7; x < width; x += 1.3) check(x, y);
+      for (const f of job.features)
+        if (f.kind === "holes")
+          for (const c of holeCenters(f)) check(c.x, c.y, 0.15);
+      expect(checked).toBeGreaterThan(500);
+    });
 
   it("sandbox demo runs clean", () => {
     const job = JOBS.find((j) => j.sandbox)!;

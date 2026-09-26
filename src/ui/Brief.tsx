@@ -1,23 +1,53 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
+import { callout } from "../game/features";
 import type { Job } from "../game/jobs";
-import type { Heightmap } from "../sim/stock";
 import { getTool } from "../sim/tools";
 import { formatTime } from "./Controls";
+import { Drawing } from "./Drawing";
 
-export function Brief({
-  job,
-  target,
-  par,
-}: {
-  job: Job;
-  target: Heightmap | null;
-  par: number | null;
-}) {
+export function Brief({ job, par }: { job: Job; par: number | null }) {
+  const [enlarged, setEnlarged] = useState(false);
+  useEffect(() => {
+    if (!enlarged) return;
+    const onKey = (e: KeyboardEvent) =>
+      e.key === "Escape" && setEnlarged(false);
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [enlarged]);
+  const hasDrawing = job.features.length > 0;
   return (
     <div className="card brief">
       <h3>Work order</h3>
       <p className="summary">{job.summary}</p>
-      {target && <TargetMap map={target} />}
+      {hasDrawing && (
+        <button
+          className="drawing-button"
+          onClick={() => setEnlarged(true)}
+          title="Enlarge drawing"
+        >
+          <Drawing stock={job.stock} features={job.features} />
+          <span className="enlarge">⤢ Enlarge</span>
+        </button>
+      )}
+      {hasDrawing && <Notes job={job} />}
+      {enlarged && (
+        <div className="drawing-modal" onClick={() => setEnlarged(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <header>
+              <strong>{job.title}</strong>
+              <span>{job.customer}</span>
+              <button
+                className="ghost small"
+                onClick={() => setEnlarged(false)}
+              >
+                Close
+              </button>
+            </header>
+            <Drawing stock={job.stock} features={job.features} />
+            <Notes job={job} />
+          </div>
+        </div>
+      )}
       <ul className="spec">
         {job.spec.map((s) => (
           <li key={s}>{s}</li>
@@ -60,40 +90,21 @@ export function Brief({
   );
 }
 
-/** Top-down depth map of the finished part: the "drawing". */
-function TargetMap({ map }: { map: Heightmap }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const c = ref.current!;
-    const { nx, ny, heights, spec } = map;
-    c.width = nx;
-    c.height = ny;
-    const g = c.getContext("2d")!;
-    const img = g.createImageData(nx, ny);
-    let min = 0;
-    for (const h of heights) min = Math.min(min, h);
-    for (let j = 0; j < ny; j++)
-      for (let i = 0; i < nx; i++) {
-        const h = heights[j * nx + i];
-        const t = min < 0 ? h / min : 0; // 0 top, 1 deepest
-        const k = ((ny - 1 - j) * nx + i) * 4;
-        img.data[k] = 190 - t * 150;
-        img.data[k + 1] = 198 - t * 110;
-        img.data[k + 2] = 206 - t * 40;
-        img.data[k + 3] = 255;
-      }
-    g.putImageData(img, 0, 0);
-    c.style.aspectRatio = `${spec.width} / ${spec.depth}`;
-  }, [map]);
+function Notes({ job }: { job: Job }) {
+  const { width, depth, height } = job.stock;
   return (
-    <figure className="target">
-      <canvas ref={ref} />
-      <figcaption>
-        <span>Target, top view · darker is deeper</span>
-        <span>
-          {map.spec.width} × {map.spec.depth} mm
-        </span>
-      </figcaption>
-    </figure>
+    <div className="notes">
+      <ol>
+        {job.features.map((f, k) => (
+          <li key={k}>{callout(f)}</li>
+        ))}
+      </ol>
+      <p>
+        Stock {width} × {depth} × {height} aluminum. All dimensions mm, ±0.1
+        unless noted. Dimensions are coordinates from work zero{" "}
+        <span className="datum-inline" aria-hidden /> (front-left corner, top
+        face).
+      </p>
+    </div>
   );
 }

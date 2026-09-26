@@ -40,6 +40,11 @@ export class Machine {
   time = 0;
   toolChanges = 0;
   alarm: Alarm | null = null;
+  /**
+   * When set, alarms are recorded here and the run carries on, so one
+   * verification pass finds every problem instead of just the first.
+   */
+  collectAlarms: Alarm[] | null = null;
   feedOverride = 1;
   rapidOverride = 1;
   singleBlock = false;
@@ -297,6 +302,12 @@ export class Machine {
   }
 
   private raise(line: number, crash: boolean, title: string, detail: string) {
+    const list = this.collectAlarms;
+    if (list) {
+      const seen = list.some((a) => a.line === line && a.title === title);
+      if (!seen && list.length < 20) list.push({ line, title, detail, crash });
+      return;
+    }
     this.alarm = { line, title, detail, crash };
     this.state = "alarm";
     this.rpm = 0;

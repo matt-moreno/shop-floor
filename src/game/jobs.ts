@@ -1,6 +1,7 @@
 import { interpret } from "../sim/gcode";
 import { Machine } from "../sim/machine";
 import { Heightmap, type StockSpec } from "../sim/stock";
+import type { Feature } from "./features";
 
 export interface Job {
   id: string;
@@ -12,6 +13,8 @@ export interface Job {
   tips: string[];
   tools: number[];
   stock: StockSpec;
+  /** Drawing features; empty for the sandbox. */
+  features: Feature[];
   starter: string;
   reference: string;
   /** Sandbox jobs are never graded. */
@@ -38,6 +41,7 @@ export const JOBS: Job[] = [
     ],
     tools: [1],
     stock: { width: 80, depth: 50, height: 20 },
+    features: [{ kind: "face", depth: 1 }],
     starter: `(JOB 1 - FIRST CHIP)
 (Face 1 mm off the top of the block)
 ${HEADER}
@@ -72,6 +76,7 @@ M30 (end of program)
     ],
     tools: [2],
     stock: { width: 80, depth: 40, height: 15 },
+    features: [{ kind: "slot", x0: 0, x1: 80, y: 20, width: 10, depth: 4 }],
     starter: `(JOB 2 - SLOT)
 ${HEADER}
 T2 M6
@@ -111,6 +116,9 @@ M30
     ],
     tools: [2],
     stock: { width: 80, depth: 60, height: 20 },
+    features: [
+      { kind: "pocket", x0: 20, y0: 15, x1: 60, y1: 45, depth: 6, radius: 5 },
+    ],
     starter: `(JOB 3 - POCKET)
 ${HEADER}
 T2 M6
@@ -164,6 +172,9 @@ G1 X55
 G1 Y40
 G1 X25
 G1 Y20
+G1 X55
+G1 Y40
+G1 X25
 G0 Z60
 M30
 `,
@@ -186,6 +197,18 @@ M30
     ],
     tools: [5],
     stock: { width: 70, depth: 70, height: 12 },
+    features: [
+      {
+        kind: "holes",
+        cx: 35,
+        cy: 35,
+        bc: 40,
+        count: 6,
+        dia: 6,
+        depth: 10,
+        startDeg: 0,
+      },
+    ],
     starter: `(JOB 4 - BOLT CIRCLE)
 ${HEADER}
 T5 M6
@@ -234,6 +257,7 @@ M30
     ],
     tools: [2],
     stock: { width: 60, depth: 60, height: 20 },
+    features: [{ kind: "boss", cx: 30, cy: 30, dia: 40, height: 5 }],
     starter: `(JOB 5 - ROUND BOSS)
 ${HEADER}
 T2 M6
@@ -275,6 +299,7 @@ M30
     ],
     tools: [1, 2, 3, 4, 5, 6],
     stock: { width: 100, depth: 80, height: 30 },
+    features: [],
     sandbox: true,
     starter: `(SANDBOX - a little demo)
 ${HEADER}

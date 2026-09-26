@@ -124,7 +124,7 @@ button:disabled {
 .workshop {
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(300px, 380px) 1fr 320px;
+  grid-template-columns: minmax(300px, 380px) 1fr 340px;
   grid-template-rows: 48px 1fr;
   grid-template-areas: "top top top" "program view side";
 }
@@ -224,14 +224,69 @@ button:disabled {
   max-height: 120px;
   overflow: auto;
 }
-.diagnostics li {
+.diagnostics li button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
   padding: 2px 0;
+  color: inherit;
+}
+.diagnostics li button:hover b {
+  text-decoration: underline;
+}
+.diagnostics b {
+  margin-right: 6px;
+}
+.diagnostics .verify {
+  color: #ff8a87;
+}
+.diagnostics .tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid #e0524f88;
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-right: 6px;
 }
 .diagnostics .error {
   color: #ff8a87;
 }
 .diagnostics .warning {
   color: var(--yellow);
+}
+.verify-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+.verify-bar.ok span:first-child {
+  color: var(--green);
+}
+.verify-bar.bad,
+.verify-bar.bad button {
+  color: #ff8a87;
+}
+.verify-bar button {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+.verify-bar button:hover {
+  text-decoration: underline;
+}
+.verify-bar .est {
+  color: var(--muted);
+  font-family: var(--mono);
 }
 .locked {
   padding: 6px 12px;
@@ -655,4 +710,177 @@ button:disabled {
   .topbar .title span {
     display: none;
   }
+}
+
+/* ---------- Drawing ---------- */
+.drawing-button {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid #2c4a63;
+  border-radius: 6px;
+  background: none;
+  overflow: hidden;
+}
+.drawing-button .enlarge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #0e1a24cc;
+  color: #9cc4e4;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.drawing-button:hover .enlarge,
+.drawing-button:focus-visible .enlarge {
+  opacity: 1;
+}
+.drawing {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #0e1a24;
+  font-family: var(--mono);
+}
+.drawing .stock {
+  fill: #13222f;
+  stroke: none;
+}
+.drawing .cut {
+  fill: #2f6f9f66;
+  stroke: #cfe3f5;
+  stroke-width: 0.35;
+}
+.drawing .cut.deep {
+  fill: #0b1219;
+}
+.drawing .edge {
+  fill: none;
+  stroke: #e3f0fb;
+  stroke-width: 0.55;
+}
+.drawing polygon.stock.edge {
+  fill: #13222f;
+}
+.drawing .hidden {
+  fill: none;
+  stroke: #9cc4e4;
+  stroke-width: 0.3;
+  stroke-dasharray: 1.4 0.9;
+}
+.drawing .phantom {
+  stroke: #6f90ab;
+  stroke-width: 0.25;
+  stroke-dasharray: 3 0.8 0.6 0.8;
+}
+.drawing .center {
+  fill: none;
+  stroke: #6f90ab;
+  stroke-width: 0.2;
+  stroke-dasharray: 3 0.8 0.6 0.8;
+}
+.drawing .dim polyline {
+  fill: none;
+  stroke: #6f90ab;
+  stroke-width: 0.2;
+}
+.drawing .dim text {
+  fill: #cfe3f5;
+}
+.drawing .label {
+  fill: #6f90ab;
+  font-size: 0.75em;
+  letter-spacing: 0.1em;
+}
+.drawing .ax-x {
+  stroke: #e0524f;
+  stroke-width: 0.45;
+}
+.drawing .ax-y {
+  stroke: #5fbf7a;
+  stroke-width: 0.45;
+}
+.drawing .ax-x-t {
+  fill: #e0524f;
+  font-size: 0.8em;
+}
+.drawing .ax-y-t {
+  fill: #5fbf7a;
+  font-size: 0.8em;
+}
+.drawing .datum-ring {
+  fill: #0e1a24;
+  stroke: #e3f0fb;
+  stroke-width: 0.3;
+}
+.drawing .datum-fill {
+  fill: #e3f0fb;
+}
+.notes {
+  font-size: 12px;
+  color: #b9c1c8;
+  margin: 8px 0 10px;
+}
+.notes ol {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  color: var(--text);
+}
+.notes p {
+  margin: 0;
+  color: var(--muted);
+}
+.datum-inline {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  vertical-align: -1px;
+  border: 1px solid #e3f0fb;
+  background: conic-gradient(
+    #e3f0fb 0 25%,
+    transparent 0 50%,
+    #e3f0fb 0 75%,
+    transparent 0
+  );
+}
+.drawing-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #000b;
+}
+.drawing-modal .sheet {
+  width: min(960px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+.drawing-modal header {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.drawing-modal header span {
+  color: var(--muted);
+  font-size: 12px;
+  flex: 1;
+}
+.drawing-modal .drawing {
+  border-radius: 8px;
+  max-height: calc(100vh - 230px);
+}
+.drawing-modal .notes {
+  font-size: 14px;
 }

@@ -4,11 +4,12 @@ import { interpret } from "../sim/gcode";
 import { Machine, type RunState } from "../sim/machine";
 import { compare, grade, type Comparison, type Grade } from "../sim/score";
 import { Heightmap } from "../sim/stock";
+import { alarmDiagnostics, verify, type Verification } from "../sim/verify";
 import { SceneView, type ViewPreset } from "../view/scene";
 import { Sound } from "../view/sound";
 import { Brief } from "./Brief";
-import { Controls } from "./Controls";
-import { Editor, type Mark } from "./Editor";
+import { Controls, formatTime } from "./Controls";
+import { Editor, type Jump, type Mark } from "./Editor";
 import { Results } from "./Results";
 
 export interface RunResult {
@@ -43,6 +44,18 @@ export function Workshop({
 }: Props) {
   const [source, setSource] = useState(initialSource);
   const program = useMemo(() => interpret(source), [source]);
+  const [verification, setVerification] = useState<Verification | null>(null);
+  const [jump, setJump] = useState<Jump | null>(null);
+  // Dry-run the program shortly after typing stops, so predicted alarms
+  // show on their lines before anything is run.
+  useEffect(() => {
+    setVerification(null);
+    const t = setTimeout(
+      () => setVerification(verify(program, job.stock)),
+      300,
+    );
+    return () => clearTimeout(t);
+  }, [program, job.stock]);
   const target = useMemo(() => (job.sandbox ? null : jobTarget(job)), [job]);
   const machine = useMemo(
     () => new Machine(program, new Heightmap(job.stock)),
@@ -164,6 +177,14 @@ export function Workshop({
       : null;
   const errors = program.diagnostics.filter((d) => d.severity === "error");
   const warnings = program.diagnostics.filter((d) => d.severity === "warning");
+  const diagnostics = useMemo(
+    () => [
+      ...program.diagnostics,
+      ...(verification ? alarmDiagnostics(verification) : []),
+    ],
+    [program, verification],
+  );
+  const goTo = (line: number) => setJump({ line, seq: (jump?.seq ?? 0) + 1 });
 
   return (
     <div className="workshop">
@@ -208,18 +229,29 @@ export function Workshop({
           value={source}
           onChange={setSource}
           readOnly={busy}
-          diagnostics={program.diagnostics}
+          diagnostics={diagnostics}
           mark={mark}
+          jump={jump}
         />
-        {program.diagnostics.length > 0 && (
+        {diagnostics.length > 0 && (
           <ul className="diagnostics">
-            {program.diagnostics.slice(0, 6).map((d, k) => (
-              <li key={k} className={d.severity}>
-                <b>Line {d.line}</b> {d.message}
+            {diagnostics.slice(0, 8).map((d, k) => (
+              <li key={k} className={d.source ?? d.severity}>
+                <button onClick={() => goTo(d.line)}>
+                  <b>Line {d.line}</b>
+                  {d.source === "verify" && <span className="tag">Verify</span>}
+                  {d.message}
+                </button>
               </li>
             ))}
           </ul>
         )}
+        <VerifyBar
+          program={program}
+          verification={verification}
+          par={target?.par ?? null}
+          onGo={goTo}
+        />
         {busy && (
           <div className="locked">
             Editing is locked while a program is running. Reset to edit.
@@ -324,12 +356,55 @@ export function Workshop({
           }}
           onChange={() => setTick((t) => t + 1)}
         />
-        <Brief
-          job={job}
-          target={target?.target ?? null}
-          par={target?.par ?? null}
-        />
+        <Brief job={job} par={target?.par ?? null} />
       </aside>
+    </div>
+  );
+}
+
+function VerifyBar({
+  program,
+  verification: v,
+  par,
+  onGo,
+}: {
+  program: ReturnType<typeof interpret>;
+  verification: Verification | null;
+  par: number | null;
+  onGo: (line: number) => void;
+}) {
+  if (program.failed)
+    return (
+      <div className="verify-bar bad">Verify: fix the program error first</div>
+    );
+  if (!program.ops.length) return null;
+  if (!v) return <div className="verify-bar">Verify: checking…</div>;
+  const time = (
+    <span className="est">
+      est. cycle {formatTime(v.time)}
+      {par !== null && ` · par ${formatTime(par)}`}
+    </span>
+  );
+  if (!v.alarms.length)
+    return (
+      <div className="verify-bar ok">
+        <span>✓ Verified: runs without alarms</span>
+        {time}
+      </div>
+    );
+  const crashes = v.alarms.filter((a) => a.crash).length;
+  const breaks = v.alarms.length - crashes;
+  const parts = [
+    crashes && `${crashes} crash${crashes > 1 ? "es" : ""}`,
+    breaks && `${breaks} broken tool${breaks > 1 ? "s" : ""}`,
+  ].filter(Boolean);
+  return (
+    <div className="verify-bar bad">
+      <button onClick={() => onGo(v.alarms[0].line)}>
+        ✗ Verify predicts {parts.join(" and ")} · first on line{" "}
+        {v.alarms[0].line}
+      </button>
+      {time}
     </div>
   );
 }
