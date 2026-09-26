@@ -24,7 +24,16 @@ Controls: Cycle Start (⌘/Ctrl+Enter), Feed Hold (Esc), Reset, Single Block, fe
 
 ## Supported G-code
 
-`G0 G1 G2 G3` (IJK or R arcs, helical), `G4`, `G17 G18 G19`, `G20 G21`, `G28`, `G73 G81 G82 G83` / `G80`, `G90 G91`, `G98 G99`, `M0 M1 M2 M3 M4 M5 M6 M8 M9 M30`, and `F S T`. Comments use `( )` or `;`. `G41/G42` and `G55–G59` produce a warning and are ignored. Work zero is the front-left corner of the top face.
+`G0 G1 G2 G3` (IJK or R arcs, helical), `G4`, `G10 L12`, `G17 G18 G19`, `G20 G21`, `G28`, `G40 G41 G42`, `G73 G81 G82 G83` / `G80`, `G90 G91`, `G98 G99`, `M0 M1 M2 M3 M4 M5 M6 M8 M9 M30`, and `D F S T`. Comments use `( )` or `;`. `G55–G59` produce a warning and are ignored. Work zero is the front-left corner of the top face.
+
+Cutter compensation (`G41` left, `G42` right, `G40` off) works in the XY plane and behaves like a type C control:
+
+- `D#` picks a radius register. D1–D6 hold each tool's nominal radius, and `G10 L12 P# R#` overwrites one.
+- The first XY move after `G41/G42` is the lead-in, ending square to the start of the contour. The `G40` move goes from the end of the contour to the programmed point, as on a real control, so `G40 G0 Z…` on its own can swing the tool into the part.
+- The interpreter looks one move ahead: outside corners get a rolled arc, and inside corners stop where the offset paths cross. Z-only moves and M codes in between wait for that corner.
+- A tool too big for an inside arc or corner is a program error (an overcut alarm), shown before anything runs.
+
+Jobs can load reground tools (`wear` in `jobs.ts`), whose real diameter differs from the D register until it's updated.
 
 ## Structure
 
@@ -51,7 +60,7 @@ npm run build
 
 - The height map can't represent undercuts. 4/5-axis work would need a voxel or dexel stock.
 - There's no lathe yet. A radius-per-Z profile turned into a 3D shape would slot in next to `Heightmap`.
-- Cutter compensation, work offsets beyond G54, tool length offsets and macros aren't simulated.
+- Work offsets beyond G54, tool length offsets and macros aren't simulated. Cutter compensation handles one move of lookahead, so programs that need more (like tiny segments shorter than the tool radius) may raise an overcut alarm where a real control would cope.
 
 The original slider-based game is archived in `archive/shop-floor-v1.tar.gz`.
 

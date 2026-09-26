@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { callout } from "../game/features";
-import type { Job } from "../game/jobs";
-import { getTool } from "../sim/tools";
+import { jobRack, type Job } from "../game/jobs";
 import { formatTime } from "./Controls";
 import { Drawing } from "./Drawing";
 
@@ -72,11 +71,10 @@ export function Brief({ job, par }: { job: Job; par: number | null }) {
           </tr>
         </thead>
         <tbody>
-          {job.tools.map((n) => {
-            const t = getTool(n)!;
+          {jobRack(job).map((t) => {
             return (
-              <tr key={n}>
-                <td>T{n}</td>
+              <tr key={t.number}>
+                <td>T{t.number}</td>
                 <td>{t.name}</td>
                 <td>{t.flutes}</td>
                 <td>{t.tip === "drill" ? "—" : t.maxDepthOfCut}</td>

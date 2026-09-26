@@ -88,6 +88,19 @@ export function getTool(n: number): Tool | undefined {
   return TOOLS.find((t) => t.number === n);
 }
 
+/**
+ * A job's tool rack: library tools, with any reground to a new actual
+ * diameter. Offsets (D registers) still hold the nominal radius.
+ */
+export function makeRack(numbers: number[], wear: Record<number, number> = {}) {
+  return numbers.map((n): Tool => {
+    const t = getTool(n)!;
+    const dia = wear[n];
+    if (dia === undefined) return t;
+    return { ...t, diameter: dia, name: `${t.name}, reground to Ø${dia}` };
+  });
+}
+
 /** Height of the tool's cutting surface above its tip at radial distance d. */
 export function tipProfile(tool: Tool, d: number): number {
   const r = tool.diameter / 2;

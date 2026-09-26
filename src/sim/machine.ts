@@ -170,7 +170,7 @@ export class Machine {
         this.opProgress += used;
         if (this.opProgress >= total - 1e-9) {
           if (op.kind === "toolchange") {
-            this.tool = getTool(op.tool) ?? null;
+            this.tool = op.spec;
             this.toolChanges++;
           }
           this.nextOp();

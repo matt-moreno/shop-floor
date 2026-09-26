@@ -219,6 +219,72 @@ export function Drawing({
         );
         break;
       }
+      case "plate": {
+        xs.push(f.x0, f.x1);
+        ys.push(f.y0, f.y1);
+        zs.push(-f.height);
+        top.push(
+          <rect
+            key={`${k}r`}
+            x={tx}
+            y={ty}
+            width={W}
+            height={D}
+            className="cut"
+          />,
+        );
+        const [x, y] = T(f.x0, f.y1);
+        top.push(
+          <rect
+            key={k}
+            x={x}
+            y={y}
+            width={f.x1 - f.x0}
+            height={f.y1 - f.y0}
+            rx={f.radius}
+            className="stock"
+          />,
+        );
+        const h = -f.height;
+        silhouette = [
+          [0, h],
+          [f.x0, h],
+          [f.x0, 0],
+          [f.x1, 0],
+          [f.x1, h],
+          [W, h],
+        ];
+        break;
+      }
+      case "notch": {
+        const r = f.width / 2;
+        xs.push(f.x - r, f.x + r);
+        ys.push(f.y - r, f.y);
+        zs.push(-f.depth);
+        const [l, back] = T(f.x - r, D),
+          [, end] = T(0, f.y),
+          [rr] = T(f.x + r, 0);
+        top.push(
+          <path
+            key={k}
+            d={`M${l} ${back}V${end}A${r} ${r} 0 0 0 ${rr} ${end}V${back}Z`}
+            className="cut"
+          />,
+        );
+        centerLines.push(crosshair(`n${k}`, ...T(f.x, f.y), r + fs * 0.5));
+        const [a, b] = F(f.x - r, 0);
+        front.push(
+          <rect
+            key={k}
+            x={a}
+            y={b}
+            width={f.width}
+            height={f.depth}
+            className="hidden"
+          />,
+        );
+        break;
+      }
     }
   });
 
