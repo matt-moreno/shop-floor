@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { jobTarget, type Job } from "../game/jobs";
+import { jobRack, jobTarget, type Job } from "../game/jobs";
 import { interpret } from "../sim/gcode";
 import { Machine, type RunState } from "../sim/machine";
 import { compare, grade, type Comparison, type Grade } from "../sim/score";
@@ -43,7 +43,8 @@ export function Workshop({
   onNext,
 }: Props) {
   const [source, setSource] = useState(initialSource);
-  const program = useMemo(() => interpret(source), [source]);
+  const rack = useMemo(() => jobRack(job), [job]);
+  const program = useMemo(() => interpret(source, { rack }), [source, rack]);
   const [verification, setVerification] = useState<Verification | null>(null);
   const [jump, setJump] = useState<Jump | null>(null);
   // Dry-run the program shortly after typing stops, so predicted alarms

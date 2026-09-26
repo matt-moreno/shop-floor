@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { holeCenters, nominalHeight } from "../game/features";
-import { JOBS, jobTarget } from "../game/jobs";
+import { JOBS, jobRack, jobTarget } from "../game/jobs";
 import { HOME, interpret, type Op } from "./gcode";
 import { Machine } from "./machine";
 import { compare, grade } from "./score";
@@ -186,6 +186,133 @@ describe("machine", () => {
   });
 });
 
+describe("cutter compensation", () => {
+  const head = "G21 G90 G17\nT2 M6\nS8000 M3\nG0 X-20 Y-20 Z-1 F500\n";
+  // A 20 mm square from X10 Y10, clockwise, G41 keeps the tool outside.
+  const square =
+    "G41 D2 G1 X10 Y10 F500\nY30\nX30\nY10\nX10\nG40 G1 X-20 Y-20\nM30";
+  const path = (src: string) =>
+    moves(interpret(src).ops)
+      .filter((o) => !o.rapid)
+      .map((o) => o.to);
+  const near = (a: { x: number; y: number }, x: number, y: number) =>
+    Math.hypot(a.x - x, a.y - y) < 1e-3;
+
+  it("offsets straight edges by the tool radius and rolls around outside corners", () => {
+    const p = interpret(head + square);
+    expect(p.failed).toBe(false);
+    const pts = path(head + square);
+    // Lead-in lands square to the first edge, left of travel.
+    expect(near(pts[0], 5, 10)).toBe(true);
+    expect(pts.some((q) => near(q, 5, 30))).toBe(true);
+    expect(pts.some((q) => near(q, 10, 35))).toBe(true);
+    // Every point on the corner roll is one radius from the part corner.
+    const roll = pts.filter((q) => q.x < 10 && q.y > 30);
+    expect(roll.length).toBeGreaterThan(3);
+    for (const q of roll)
+      expect(Math.hypot(q.x - 10, q.y - 30)).toBeCloseTo(5, 3);
+  });
+
+  it("stops at the crossing point on inside corners", () => {
+    // Counterclockwise inside a pocket with G41 keeps the tool inside.
+    const src =
+      head.replace("X-20 Y-20", "X20 Y20") +
+      "G41 D2 G1 X20 Y10\nX30\nY30\nX10\nY10\nX20\nG40 G1 X20 Y20\nM30";
+    const pts = path(src);
+    for (const [x, y] of [
+      [25, 15],
+      [25, 25],
+      [15, 25],
+      [15, 15],
+    ])
+      expect(
+        pts.some((q) => near(q, x, y)),
+        `X${x} Y${y}`,
+      ).toBe(true);
+    expect(pts.every((q) => q.x >= 15 - 1e-3 && q.x <= 25 + 1e-3)).toBe(true);
+  });
+
+  it("cuts the part to the programmed size", () => {
+    const m = run(head + square, { width: 40, depth: 40, height: 10 });
+    expect(m.alarm).toBeNull();
+    expect(m.stock.heightAt(10.2, 20)).toBe(0);
+    expect(m.stock.heightAt(9.8, 20)).toBeCloseTo(-1);
+    expect(m.stock.heightAt(20, 30.2)).toBeCloseTo(-1);
+  });
+
+  it("offsets arcs by growing or shrinking their radius", () => {
+    // Clockwise full circle, tool outside: R10 part, R15 tool path.
+    const src =
+      head + "G41 D2 G1 X10 Y20\nG2 X10 Y20 I10 J0\nG40 G1 X-20 Y20\nM30";
+    const arc = path(src).slice(1, -1);
+    expect(arc.length).toBeGreaterThan(20);
+    for (const q of arc)
+      expect(Math.hypot(q.x - 20, q.y - 20)).toBeCloseTo(15, 3);
+  });
+
+  it("alarms when the tool is too big for an inside arc", () => {
+    const src =
+      head.replace("X-20 Y-20", "X20 Y0") +
+      "G41 D2 G1 X15 Y0\nY20\nG3 X25 Y20 R5\nG1 Y0\nG40 G1 X20 Y-10\nM30";
+    const p = interpret(src);
+    expect(p.failed).toBe(true);
+    expect(p.diagnostics[0]).toMatchObject({ line: 7 });
+    expect(p.diagnostics[0].message).toMatch(/smaller cutter/);
+    expect(interpret(src.replace("D2", "D3").replace("T2", "T3")).failed).toBe(
+      false,
+    );
+  });
+
+  it("alarms when an inside corner is too tight", () => {
+    // A 6 mm slot-shaped pocket is narrower than the Ø10 tool.
+    const src =
+      head.replace("X-20 Y-20", "X20 Y20") +
+      "G41 D2 G1 X20 Y17\nX30\nY23\nX10\nY17\nX20\nG40 G1 X20 Y20\nM30";
+    expect(interpret(src).diagnostics[0].message).toMatch(
+      /Cutter compensation/,
+    );
+  });
+
+  it("moves to the programmed point on the G40 line, like a real control", () => {
+    const src = head + square.replace("G40 G1 X-20 Y-20", "G40 G0 Z20");
+    const last = moves(interpret(src).ops).at(-1)!;
+    expect(last.from).toMatchObject({ x: 10, y: 5 });
+    expect(last.to).toEqual({ x: 10, y: 10, z: 20 });
+  });
+
+  it("uses G10 L12 radius offsets", () => {
+    const pts = path(head + "G10 L12 P2 R4.5\n" + square);
+    expect(near(pts[0], 5.5, 10)).toBe(true);
+  });
+
+  it("holds Z moves until the corner ahead is known", () => {
+    const src =
+      "G21 G90\nT2 M6\nS8000 M3\nG0 X-20 Y10 Z5\nG41 D2 G1 X0 Y10 F500\nZ-1\nX30\nG40 G1 X50\nM30";
+    const m = moves(interpret(src).ops);
+    const plunge = m.find((o) => o.to.z === -1)!;
+    expect(plunge.from.y).toBeCloseTo(15);
+    expect(plunge.to.x).toBeCloseTo(0);
+  });
+
+  it("needs a D word, G17 and a straight lead-in", () => {
+    expect(interpret("G41 G1 X10 F100").diagnostics[0].message).toMatch(
+      /D word/,
+    );
+    expect(interpret("G18 G41 D2").diagnostics[0].message).toMatch(/G17/);
+    const arcIn = interpret("T2 M6\nG0 X0 Y0 Z0\nG41 D2 G2 X10 Y0 R5 F100");
+    expect(
+      arcIn.diagnostics.find((d) => d.severity === "error")!.message,
+    ).toMatch(/lead-in/);
+  });
+
+  it("warns when D doesn't match the loaded tool", () => {
+    const p = interpret("T3 M6\nG0 X0 Y0\nG41 D2\nG40\nM30");
+    expect(p.diagnostics.some((d) => /T3 is loaded/.test(d.message))).toBe(
+      true,
+    );
+  });
+});
+
 describe("verify", () => {
   const stock = { width: 60, depth: 40, height: 10 };
   const start = "G21 G90\nT2 M6\nS8000 M3\nG0 X-8 Y20\nG0 Z2\n";
@@ -219,7 +346,10 @@ describe("jobs", () => {
   for (const job of JOBS) {
     it(`${job.title}: reference runs clean and earns 3 stars`, () => {
       const { target, par } = jobTarget(job);
-      const m = new Machine(interpret(job.reference), new Heightmap(job.stock));
+      const m = new Machine(
+        interpret(job.reference, { rack: jobRack(job) }),
+        new Heightmap(job.stock),
+      );
       m.finish();
       expect(m.alarm).toBeNull();
       expect(m.state).toBe("done");
@@ -231,7 +361,10 @@ describe("jobs", () => {
     if (!job.sandbox && job.starter !== job.reference)
       it(`${job.title}: the starter program doesn't pass yet`, () => {
         const { target, par } = jobTarget(job);
-        const m = new Machine(interpret(job.starter), new Heightmap(job.stock));
+        const m = new Machine(
+          interpret(job.starter, { rack: jobRack(job) }),
+          new Heightmap(job.stock),
+        );
         m.finish();
         expect(m.alarm).toBeNull();
         expect(grade(compare(m.stock, target), m.time, par).passed).toBe(false);
@@ -259,9 +392,37 @@ describe("jobs", () => {
       expect(checked).toBeGreaterThan(500);
     });
 
+  it("Bracket: the Ø10 cutter can't make the notch", () => {
+    const job = JOBS.find((j) => j.id === "bracket")!;
+    const src = job.reference
+      .replace("T3 M6", "T2 M6")
+      .replace("D3", "D2")
+      .replace("S10000", "S8000");
+    const p = interpret(src, { rack: jobRack(job) });
+    expect(p.failed).toBe(true);
+    expect(p.diagnostics[0].message).toMatch(/R5 arc/);
+  });
+
+  it("Reground: the nominal offset leaves the plate oversize", () => {
+    const job = JOBS.find((j) => j.id === "reground")!;
+    const { target, par } = jobTarget(job);
+    const m = new Machine(
+      interpret(job.starter, { rack: jobRack(job) }),
+      new Heightmap(job.stock),
+    );
+    m.finish();
+    const c = compare(m.stock, target);
+    expect(c.remaining).toBeGreaterThan(0.03);
+    expect(c.gouged).toBe(0);
+    expect(grade(c, m.time, par).passed).toBe(false);
+  });
+
   it("sandbox demo runs clean", () => {
     const job = JOBS.find((j) => j.sandbox)!;
-    const m = new Machine(interpret(job.starter), new Heightmap(job.stock));
+    const m = new Machine(
+      interpret(job.starter, { rack: jobRack(job) }),
+      new Heightmap(job.stock),
+    );
     m.finish();
     expect(m.alarm).toBeNull();
   });
