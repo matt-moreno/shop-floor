@@ -1,0 +1,37 @@
+{
+  "name": "shop-floor",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@lezer/highlight": "^1.2.4",
+    "codemirror": "^6.0.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.9",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "prettier": "^3.6.2",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^4.1.11"
+  }
+}
